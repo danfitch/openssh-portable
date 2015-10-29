@@ -1179,6 +1179,8 @@ process_rename(u_int32_t id)
 	char *oldpath, *newpath;
 	int r, status;
 	struct stat sb;
+	pid_t my_pid;
+	int forkstatus, timeout;
 
 	if ((r = sshbuf_get_cstring(iqueue, &oldpath, NULL)) != 0 ||
 	    (r = sshbuf_get_cstring(iqueue, &newpath, NULL)) != 0)
@@ -1225,6 +1227,28 @@ process_rename(u_int32_t id)
 	} else if (stat(newpath, &sb) == -1) {
 		if (rename(oldpath, newpath) == -1)
 			status = errno_to_portable(errno);
+			if (errno == EXDEV ) {
+				debug3("request %u: rename custom", id);
+				logit("custom rename old \"%s\" new \"%s\"", oldpath, newpath);
+				if (0 == (my_pid = fork())) {
+					if (-1 == execl("/bin/mv","mv",oldpath,newpath,NULL)) {
+						//We should never get here becuase of the fork + execl so bail!
+						return -1;
+					}
+				}
+				timeout = 1000;
+				while (0 == waitpid(my_pid , &forkstatus , WNOHANG)) {
+					if ( --timeout < 0 ) {
+						perror("timeout");
+						status = SSH2_FX_FAILURE;
+					} else
+						sleep(1);
+				}
+				if (1 != WIFEXITED(forkstatus) || 0 != WEXITSTATUS(forkstatus)) {
+					status = SSH2_FX_FAILURE;
+				} else
+					status = SSH2_FX_OK;
+			}
 		else
 			status = SSH2_FX_OK;
 	}
