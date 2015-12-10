@@ -93,7 +93,8 @@
 #define SSH2_FX_NO_CONNECTION		6
 #define SSH2_FX_CONNECTION_LOST		7
 #define SSH2_FX_OP_UNSUPPORTED		8
-#define SSH2_FX_MAX			8
+#define SSH2_FX_CROSS_DEVICE			9
+#define SSH2_FX_MAX			9
 
 struct passwd;
 

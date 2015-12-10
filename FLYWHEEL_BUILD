@@ -1,0 +1,48 @@
+
+OpenSSH has been configured with the following options:
+                     User binaries: /usr/bin
+                   System binaries: /usr/sbin
+               Configuration files: /usr/etc
+                   Askpass program: /usr/libexec/ssh-askpass
+                      Manual pages: /usr/share/man/manX
+                          PID file: /var/run
+  Privilege separation chroot path: /var/empty
+            sshd default user PATH: /usr/bin:/bin:/usr/sbin:/sbin
+                    Manpage format: doc
+                       PAM support: yes
+                   OSF SIA support: no
+                 KerberosV support: no
+                   SELinux support: no
+                 Smartcard support:
+                     S/KEY support: no
+              MD5 password support: no
+                   libedit support: no
+  Solaris process contract support: no
+           Solaris project support: no
+       IP address in $DISPLAY hack: no
+           Translate v4 in v6 hack: yes
+                  BSD Auth support: no
+              Random number source: OpenSSL internal ONLY
+             Privsep sandbox style: seccomp_filter
+
+              Host: x86_64-unknown-linux-gnu
+          Compiler: gcc
+    Compiler flags: -g -O2 -Wall -Wpointer-arith -Wuninitialized -Wsign-compare -Wformat-security -Wno-pointer-sign -Wno-unused-result -fno-strict-aliasing -D_FORTIFY_SOURCE=2 -ftrapv -fno-builtin-memset -fstack-protector-all -fPIE
+Preprocessor flags:
+      Linker flags:  -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -fstack-protector-all -pie
+         Libraries: -lcrypto -lrt -ldl -lutil -lz -lnsl  -lcrypt -lresolv
+         +for sshd:  -lpam
+
+PAM is enabled. You may need to install a PAM control file
+for sshd, otherwise password authentication may fail.
+Example PAM control files can be found in the contrib/
+subdirectory
+
+##THIS IS HOW TO INSTALL OPEN SSH
+git checkout V_7_1
+apt-get update
+apt-get install build-essential zlib1g-dev libwrap0-dev libssl-dev libpam0g-dev libkrb5-dev
+apt-get build-dep openssh
+apt-get install autoconf
+autoreconf
+./configure --prefix=/usr --with-pam --with-privsep-path=/var/lib/sshd --with-md5-passwords --sysconfdir=/etc/ssh

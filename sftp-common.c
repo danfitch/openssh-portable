@@ -201,6 +201,8 @@ fx2txt(int status)
 		return("Connection lost");
 	case SSH2_FX_OP_UNSUPPORTED:
 		return("Operation unsupported");
+	case SSH2_FX_CROSS_DEVICE:
+		return("Cross Device");
 	default:
 		return("Unknown status");
 	}

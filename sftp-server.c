@@ -210,6 +210,9 @@ errno_to_portable(int unixerrno)
 	case ENOSYS:
 		ret = SSH2_FX_OP_UNSUPPORTED;
 		break;
+	case EXDEV:
+		ret = SSH2_FX_CROSS_DEVICE;
+		break;
 	default:
 		ret = SSH2_FX_FAILURE;
 		break;
@@ -506,6 +509,7 @@ status_to_message(u_int32_t status)
 		"No connection",		/* SSH_FX_NO_CONNECTION */
 		"Connection lost",		/* SSH_FX_CONNECTION_LOST */
 		"Operation unsupported",	/* SSH_FX_OP_UNSUPPORTED */
+		"EXDEV",
 		"Unknown error"			/* Others */
 	};
 	return (status_messages[MIN(status,SSH2_FX_MAX)]);
@@ -1209,9 +1213,31 @@ process_rename(u_int32_t id)
 				 * stat+rename.  This is racy.
 				 */
 				if (stat(newpath, &st) == -1) {
-					if (rename(oldpath, newpath) == -1)
-						status =
-						    errno_to_portable(errno);
+					if (rename(oldpath, newpath) == -1) {
+						status = errno_to_portable(errno);
+						if (status == SSH2_FX_CROSS_DEVICE ) {
+							debug3("request %u: rename custom", id);
+							logit("custom rename old \"%s\" new \"%s\"", oldpath, newpath);
+							if (0 == (my_pid = fork())) {
+								if (-1 == execl("/bin/mv","mv",oldpath,newpath,NULL)) {
+									//We should never get here becuase of the fork + execl so bail!
+									return -1;
+								}
+							}
+							timeout = 1000;
+							while (0 == waitpid(my_pid , &forkstatus , WNOHANG)) {
+								if ( --timeout < 0 ) {
+									perror("timeout");
+									status = SSH2_FX_FAILURE;
+								} else
+									sleep(1);
+							}
+							if (1 != WIFEXITED(forkstatus) || 0 != WEXITSTATUS(forkstatus)) {
+								status = SSH2_FX_FAILURE;
+							} else
+								status = SSH2_FX_OK;
+						}
+					}
 					else
 						status = SSH2_FX_OK;
 				}
@@ -1225,9 +1251,9 @@ process_rename(u_int32_t id)
 		} else
 			status = SSH2_FX_OK;
 	} else if (stat(newpath, &sb) == -1) {
-		if (rename(oldpath, newpath) == -1)
+		if (rename(oldpath, newpath) == -1) {
 			status = errno_to_portable(errno);
-			if (errno == EXDEV ) {
+			if (status == SSH2_FX_CROSS_DEVICE ) {
 				debug3("request %u: rename custom", id);
 				logit("custom rename old \"%s\" new \"%s\"", oldpath, newpath);
 				if (0 == (my_pid = fork())) {
@@ -1249,6 +1275,7 @@ process_rename(u_int32_t id)
 				} else
 					status = SSH2_FX_OK;
 			}
+		}
 		else
 			status = SSH2_FX_OK;
 	}
@@ -1307,6 +1334,8 @@ process_extended_posix_rename(u_int32_t id)
 {
 	char *oldpath, *newpath;
 	int r, status;
+	pid_t my_pid;
+	int forkstatus, timeout;
 
 	if ((r = sshbuf_get_cstring(iqueue, &oldpath, NULL)) != 0 ||
 	    (r = sshbuf_get_cstring(iqueue, &newpath, NULL)) != 0)
@@ -1314,8 +1343,32 @@ process_extended_posix_rename(u_int32_t id)
 
 	debug3("request %u: posix-rename", id);
 	logit("posix-rename old \"%s\" new \"%s\"", oldpath, newpath);
-	r = rename(oldpath, newpath);
-	status = (r == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
+	if (rename(oldpath, newpath) == -1) {
+		status = errno_to_portable(errno);
+		if (status == SSH2_FX_CROSS_DEVICE ) {
+			debug3("request %u: rename custom", id);
+			logit("custom rename old \"%s\" new \"%s\"", oldpath, newpath);
+			if (0 == (my_pid = fork())) {
+				if (-1 == execl("/bin/mv","mv",oldpath,newpath,NULL)) {
+					//We should never get here becuase of the fork + execl so bail!
+				}
+			}
+			timeout = 1000;
+			while (0 == waitpid(my_pid , &forkstatus , WNOHANG)) {
+				if ( --timeout < 0 ) {
+					perror("timeout");
+					status = SSH2_FX_FAILURE;
+				} else
+					sleep(1);
+			}
+			if (1 != WIFEXITED(forkstatus) || 0 != WEXITSTATUS(forkstatus)) {
+				status = SSH2_FX_FAILURE;
+			} else
+				status = SSH2_FX_OK;
+		}
+	}
+	else
+		status = SSH2_FX_OK;
 	send_status(id, status);
 	free(oldpath);
 	free(newpath);
